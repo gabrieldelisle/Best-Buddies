@@ -36,7 +36,6 @@ def normalize(FA,FB):
 
 
 def neighbours(p, size, n) :
-	print(p, size//2)
 	return [p + n * i + j 
 		for i in range(-(size//2), size//2+1) 
 		for j in range(-(size//2), size//2+1) 
@@ -44,29 +43,24 @@ def neighbours(p, size, n) :
 	]
 
 def correlation(CA, CB) :
-	p = 0
-	q = 0
-	shape = CA.shape
-	vector_shape = shape[:2]+(-1,)
-	CA = CA.view(vector_shape)
-	CB = CB.view(vector_shape)
 	n = CA.shape[2]
-	side = int(np.sqrt(n))
+	row = int(np.sqrt(n))
 
 	corr = torch.zeros((n,n))
 	for p in range(n):
 		for q in range(n) :
-			
-			
-			print(neighbours(q, 3, side))
-			ca = CA[:,:,neighbours(p, 3, side)]
-			cb = CB[:,:,neighbours(q, 3, side)]
+			ca = CA[:,:,neighbours(p, 3, row)]
+			cb = CB[:,:,neighbours(q, 3, row)]
 			dot = torch.einsum("ijk,ijl->kl", (ca,cb))
 			normA = torch.sqrt(torch.einsum("ijk,ijk->k", (ca,ca))).view(-1,1)
 			normB = torch.sqrt(torch.einsum("ijk,ijk->k", (cb,cb))).view(1,-1)
 	
 			corr[p,q] = torch.sum(dot / normA / normB)
 	return corr
+
+
+def bestbuddies(CA, CB):
+	pass
 
 
 VGG19 = models.vgg19(pretrained=True)
@@ -78,8 +72,8 @@ imB = load("original_B.png")
 FB = forward_pass(imB, VGG19)
 
 CA, CB = normalize(FA[-1], FB[-1])
-
-print(CA, CB)
+CA = CA.view(CA.shape[:2]+(-1,))
+CB = CB.view(CB.shape[:2]+(-1,))
 
 print(correlation(CA, CB))
 
