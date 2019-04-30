@@ -59,8 +59,16 @@ def correlation(CA, CB) :
 	return corr
 
 
-def bestbuddies(CA, CB):
-	pass
+def bestBuddies(CA, CB):
+	corr = correlation(CA, CB)
+	bbA = []
+	bbB = []
+	for p in range(CA.shape[2]):
+		q = torch.argmax(corr[p])
+		if torch.argmax(corr[q]) == p:
+			bbA.append(p)
+			bbB.append(q)
+	return bbA, bbB
 
 
 VGG19 = models.vgg19(pretrained=True)
@@ -75,7 +83,7 @@ CA, CB = normalize(FA[-1], FB[-1])
 CA = CA.view(CA.shape[:2]+(-1,))
 CB = CB.view(CB.shape[:2]+(-1,))
 
-print(correlation(CA, CB))
+print(bestBuddies(CA, CB))
 
 
 
