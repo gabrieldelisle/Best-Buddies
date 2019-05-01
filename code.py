@@ -59,15 +59,29 @@ def correlation(CA, CB) :
 	return corr
 
 
-def bestBuddies(CA, CB):
+def bestBuddies(FA, FB):
+	FA = FA.view(FA.shape[:2]+(-1,))
+	FB = FB.view(FB.shape[:2]+(-1,))
+	CA, CB = normalize(FA, FB)
 	corr = correlation(CA, CB)
+	print(corr)
+
+	# filter for keeping only significative activations
+	normA = torch.sqrt(torch.einsum("ijk,ijk->k", (FA,FA)))
+	normB = torch.sqrt(torch.einsum("ijk,ijk->k", (FB,FB)))
+	HA = (normA - torch.min(normA)) / (torch.max(normA) - torch.min(normA))
+	HB = (normB - torch.min(normB)) / (torch.max(normB) - torch.min(normB))
+	gamma = 0.05
+
 	bbA = []
 	bbB = []
 	for p in range(CA.shape[2]):
-		q = torch.argmax(corr[p])
-		if torch.argmax(corr[q]) == p:
-			bbA.append(p)
-			bbB.append(q)
+		q = torch.argmax(corr[p]).item()
+		if torch.argmax(corr[q]).item() == p:
+			print(HA[p], HB[q])
+			if HA[p] > gamma and HB[q] > gamma: 
+				bbA.append(p)
+				bbB.append(q)
 	return bbA, bbB
 
 
@@ -79,11 +93,9 @@ FA = forward_pass(imA, VGG19)
 imB = load("original_B.png")
 FB = forward_pass(imB, VGG19)
 
-CA, CB = normalize(FA[-1], FB[-1])
-CA = CA.view(CA.shape[:2]+(-1,))
-CB = CB.view(CB.shape[:2]+(-1,))
 
-print(bestBuddies(CA, CB))
+
+print(bestBuddies(FA[-1], FB[-1]))
 
 
 
