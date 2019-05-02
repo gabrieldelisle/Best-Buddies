@@ -3,6 +3,7 @@ from torchvision import transforms
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 
 
@@ -91,15 +92,19 @@ l_layer=[5,10,19,28,37] #use l_layer[l-1] for l=5to1
 
 def pyramid_search(FA, FB):
 	R = [[FA[-1], 0, 0, FB[-1], 0, 0]]
+	finalA = []
+	finalB = []
 
 	for l in range(4,-1,-1) :
 		print(l)
 		new_R=[]
+		
 		for regions in R:
 			bbA, bbB = bestBuddies(*regions)
 			print(bbA, bbB)
-			if l==0 :
-				return bbA, bbB
+			if l==0:
+				finalA += bbA
+				finalB += bbB
 
 			for k in range(len(bbA)):
 				px, py = bbA[k]
@@ -116,7 +121,23 @@ def pyramid_search(FA, FB):
 					2 * qy - r//2,
 				))
 		R = new_R
+	return finalA, finalB
 
+
+def display(im, points):
+	r = 5
+	n = im.shape[0]
+	print(im.shape)
+	im = im.view(3,224,224)
+	for px,py in points:
+		im[:,neighbours(px, r, n),:][:,:,neighbours(py, r, n)] = 0
+	im = im.numpy()
+	im = im.transpose([2,1,0])
+	print(im.shape)
+		
+	plt.imshow(im)
+	plt.show()
+	plt.close()
 
 
 VGG19 = models.vgg19(pretrained=True)
@@ -128,7 +149,10 @@ imB = load("original_B.png")
 FB = forward_pass(imB, VGG19)
 
 
-pyramid_search(FA, FB)
+pointsA, pointsB = pyramid_search(FA, FB)
+
+display(imA, pointsA)
+display(imB, pointsB)
 
 
 
