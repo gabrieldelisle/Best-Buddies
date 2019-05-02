@@ -60,7 +60,7 @@ def correlation(CA, CB, size) :
 	return corr
 
 
-def bestBuddies(FA, FB):
+def bestBuddies(FA, xA, yA, FB, xB, yB):
 	n = FA.shape[2]
 
 	CA, CB = normalize(FA, FB)
@@ -70,8 +70,7 @@ def bestBuddies(FA, FB):
 	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FB,FB)))
 	HA = (normA - torch.min(normA)) / (torch.max(normA) - torch.min(normA))
 	HB = (normB - torch.min(normB)) / (torch.max(normB) - torch.min(normB))
-	gamma = 0.05
-
+	gamma = 0#.05
 	bbA = []
 	bbB = []
 
@@ -82,27 +81,41 @@ def bestBuddies(FA, FB):
 			px, py = p//n, p%n
 			qx, qy = q//n, q%n
 			if HA[px, py] > gamma and HB[qx, qy] > gamma: 
-				bbA.append((px, py))
-				bbB.append((qx, qy))
+				bbA.append((px + xA, py + yA))
+				bbB.append((qx + xB, qy + yB))
 	return bbA, bbB
 
 
 radius_list=[4,4,6,6] #use radius_list[l-2] for l=5to2
 l_layer=[5,10,19,28,37] #use l_layer[l-1] for l=5to1
 
-def next_layer(R,l):
-	for regions in R:
-		print(regions[0].shape)
+def pyramid_search(FA, FB):
+	R = [[FA[-1], 0, 0, FB[-1], 0, 0]]
+
+	for l in range(4,-1,-1) :
+		print(l)
 		new_R=[]
-		bbA, bbB = bestBuddies(*regions)
-		print(bbA, bbB)
-		for k in range(len(bbA)):
-			new_R.append([])
-			px, py = bbA[k]
-			qx, qy = bbB[k]
-			new_R[k].append(FA[l_layer[l-1]][:,:,neighbours(2*px, radius_list[l-2]+1, FA[l_layer[l-1]].shape[2]),:][:,:,:,neighbours(2*py, radius_list[l-2]+1, FA[l_layer[l-1]].shape[2])])
-			new_R[k].append(FB[l_layer[l-1]][:,:,neighbours(2*qx, radius_list[l-2]+1, FB[l_layer[l-1]].shape[2]),:][:,:,:,neighbours(2*qy, radius_list[l-2]+1, FB[l_layer[l-1]].shape[2])])
-	return new_R
+		for regions in R:
+			bbA, bbB = bestBuddies(*regions)
+			print(bbA, bbB)
+			if l==0 :
+				return bbA, bbB
+
+			for k in range(len(bbA)):
+				px, py = bbA[k]
+				qx, qy = bbB[k]
+				n = FA[l_layer[l-1]].shape[2]
+				r = radius_list[l-2]+1
+
+				new_R.append((
+					FA[l_layer[l-1]][:,:,neighbours(2*px, r, n),:][:,:,:,neighbours(2*py, r, n)],
+					2 * px - r//2,
+					2 * py - r//2,
+					FB[l_layer[l-1]][:,:,neighbours(2*qx, r, n),:][:,:,:,neighbours(2*qy, r, n)],
+					2 * qx - r//2,
+					2 * qy - r//2,
+				))
+		R = new_R
 
 
 
@@ -115,10 +128,7 @@ imB = load("original_B.png")
 FB = forward_pass(imB, VGG19)
 
 
-R = [[FA[-1], FB[-1]]]
-for l in range(4,0,-1) :
-	print(l)
-	R = next_layer(R,l)
+pyramid_search(FA, FB)
 
 
 
