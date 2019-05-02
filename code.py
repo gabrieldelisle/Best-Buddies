@@ -43,31 +43,28 @@ def neighbours(x, size, n) :
 
 def correlation(CA, CB) :
 	n = CA.shape[2]
-	print(CA.shape)
 
 	corr = torch.zeros((n*n,n*n))
 	for px in range(n):
 		for py in range(n):
 			for qx in range(n):
 				for qy in range(n):
-					print(neighbours(px, 3, n))
 					ca = CA[:,:,neighbours(px, 3, n),:][:,:,:,neighbours(py, 3, n)]
 					cb = CB[:,:,neighbours(qx, 3, n),:][:,:,:,neighbours(qy, 3, n)]
-					print(ca.shape, cb.shape)
 					dot = torch.einsum("ijkl,ijuv->kluv", (ca,cb))
 					normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (ca,ca)))
 					normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (cb,cb)))
 					normA = normA.view(*normA.shape, 1, 1)
 					normB = normB.view(1, 1, *normB.shape)
-					print(px, py, qx, dot / normA / normB)
 					corr[px * n + py, qx * n + qy] = torch.sum(dot / normA / normB)
 	return corr
 
 
 def bestBuddies(FA, FB):
+	n = FA.shape[2]
+	
 	CA, CB = normalize(FA, FB)
 	corr = correlation(CA, CB)
-	print(corr)
 
 	# filter for keeping only significative activations
 	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FA,FA)))
@@ -79,13 +76,16 @@ def bestBuddies(FA, FB):
 	bbA = []
 	bbB = []
 
-	n = corr.shape[0]
-	for p in range(CA.shape[2]):
+	
+	for p in range(corr.shape[0]):
 		q = torch.argmax(corr[p,:]).item()
 		if torch.argmax(corr[:,q]).item() == p:
-			if HA[p] > gamma and HB[q] > gamma: 
-				bbA.append((p//n, p%n))
-				bbB.append((q//n, q%n))
+			print(p,q)
+			px, py = p//n, p%n
+			qx, qy = q//n, q%n
+			if HA[px, py] > gamma and HB[qx, qy] > gamma: 
+				bbA.append((px, py))
+				bbB.append((qx, qy))
 	return bbA, bbB
 
 
