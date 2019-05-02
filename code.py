@@ -35,53 +35,57 @@ def normalize(FA,FB):
 	return (FA - mu_A) / sigma_A * sigma + mu, (FB - mu_B) / sigma_B * sigma + mu 
 
 
-def neighbours(p, size, n) :
-	return [p + n * i + j 
+def neighbours(x, size, n) :
+	return [x + i 
 		for i in range(-(size//2), size//2+1) 
-		for j in range(-(size//2), size//2+1) 
-		if p//n+i>=0 and p//n+i<n and p%n+j>=0 and p%n+j<n
+		if x+i >=0 and x+i <n
 	]
 
 def correlation(CA, CB) :
 	n = CA.shape[2]
-	row = int(np.sqrt(n))
+	print(CA.shape)
 
-	corr = torch.zeros((n,n))
-	for p in range(n):
-		for q in range(n) :
-			ca = CA[:,:,neighbours(p, 3, row)]
-			cb = CB[:,:,neighbours(q, 3, row)]
-			dot = torch.einsum("ijk,ijl->kl", (ca,cb))
-			normA = torch.sqrt(torch.einsum("ijk,ijk->k", (ca,ca))).view(-1,1)
-			normB = torch.sqrt(torch.einsum("ijk,ijk->k", (cb,cb))).view(1,-1)
-	
-			corr[p,q] = torch.sum(dot / normA / normB)
+	corr = torch.zeros((n*n,n*n))
+	for px in range(n):
+		for py in range(n):
+			for qx in range(n):
+				for qy in range(n):
+					print(neighbours(px, 3, n))
+					ca = CA[:,:,neighbours(px, 3, n),:][:,:,:,neighbours(py, 3, n)]
+					cb = CB[:,:,neighbours(qx, 3, n),:][:,:,:,neighbours(qy, 3, n)]
+					print(ca.shape, cb.shape)
+					dot = torch.einsum("ijkl,ijuv->kluv", (ca,cb))
+					normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (ca,ca)))
+					normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (cb,cb)))
+					normA = normA.view(*normA.shape, 1, 1)
+					normB = normB.view(1, 1, *normB.shape)
+					print(px, py, qx, dot / normA / normB)
+					corr[px * n + py, qx * n + qy] = torch.sum(dot / normA / normB)
 	return corr
 
 
 def bestBuddies(FA, FB):
-	FA = FA.view(FA.shape[:2]+(-1,))
-	FB = FB.view(FB.shape[:2]+(-1,))
 	CA, CB = normalize(FA, FB)
 	corr = correlation(CA, CB)
 	print(corr)
 
 	# filter for keeping only significative activations
-	normA = torch.sqrt(torch.einsum("ijk,ijk->k", (FA,FA)))
-	normB = torch.sqrt(torch.einsum("ijk,ijk->k", (FB,FB)))
+	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FA,FA)))
+	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FB,FB)))
 	HA = (normA - torch.min(normA)) / (torch.max(normA) - torch.min(normA))
 	HB = (normB - torch.min(normB)) / (torch.max(normB) - torch.min(normB))
 	gamma = 0.05
 
 	bbA = []
 	bbB = []
+
+	n = corr.shape[0]
 	for p in range(CA.shape[2]):
-		q = torch.argmax(corr[p]).item()
-		if torch.argmax(corr[q]).item() == p:
-			print(HA[p], HB[q])
+		q = torch.argmax(corr[p,:]).item()
+		if torch.argmax(corr[:,q]).item() == p:
 			if HA[p] > gamma and HB[q] > gamma: 
-				bbA.append(p)
-				bbB.append(q)
+				bbA.append((p//n, p%n))
+				bbB.append((q//n, q%n))
 	return bbA, bbB
 
 
@@ -90,7 +94,7 @@ VGG19 = models.vgg19(pretrained=True)
 imA = load("original_A.png")
 FA = forward_pass(imA, VGG19)
 
-imB = load("original_B.png")
+imB = load("original_A.png")
 FB = forward_pass(imB, VGG19)
 
 
