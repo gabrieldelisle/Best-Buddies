@@ -9,16 +9,10 @@ import torch
 
 
 def load(im):
-    I = cv2.imread(im)
-    I = I.astype(float)/255
-    I = I.transpose([2, 0, 1])
-    I = torch.from_numpy(I)
-    I = I.float()
-    I = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(I)
-    I = I.unsqueeze(0)
-    return I
-
-
+	I = Image.open(im).convert('RGB')
+	transform = get_transform(224)
+	I = transform(I).unsqueeze(0)
+	return I
 
 def forward_pass(im, net):
 	activations = [im]
@@ -41,6 +35,54 @@ def neighbours(x, size, n) :
 		for i in range(-(size//2), size//2+1) 
 		if x+i >=0 and x+i <n
 	]
+
+def correlation_conv(CA, CB, neighbours_size=3, sum_over_neigh= False):
+	# number of pixels in the region
+	n = CA.shape[2]
+	pad_list = tuple([neighbours_size // 2,neighbours_size // 2,neighbours_size // 2,neighbours_size // 2])
+	pad_size = neighbours_size // 2
+	# initialize matrix of correlations
+	corr = torch.zeros((n*n,n*n))
+	ones_filter = torch.ones((1,1,neighbours_size,neighbours_size))
+	print(ones_filter.shape)
+	# normalize CA and CB
+
+	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (CA,CA)))
+	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (CB,CB)))
+	
+	# normalize puxels here
+	CAnorm = CA / normA
+	CBnorm = CB / normB
+	
+	# padding using reflected feature
+	CAnorm = functional.pad(CAnorm, pad_list,  'reflect').data
+	CBnorm = functional.pad(CBnorm, pad_list,  'reflect').data
+
+	# for each pixel in image A (not starting from the padded region)
+	for px in range(pad_size,n + pad_size):
+		for py in range(pad_size,n + pad_size):
+			
+			# find the patch of neighbouring pixels
+			ca = CAnorm[:,:,neighbours(px, neighbours_size, n+pad_size+1),:][:,:,:,neighbours(py, neighbours_size, n+pad_size+1)]
+			## compute correlation
+			# here there is no need to flip the image
+			# since the convolution is implemented as correlation
+			R = functional.conv2d(CBnorm, ca.contiguous(), padding=0).data
+			
+			# if option is set, sum the correlations in the 
+			# neighbouring region
+			if sum_over_neigh:
+				R = functional.pad(R, pad_list,  'reflect')
+				R = functional.conv2d(R, ones_filter, padding=0).data
+			
+			# reshape to fit the result in the correlation matrix
+			R = R.reshape(1, -1)
+			R = R.squeeze()
+			corr[(px-pad_size) * n + (py - pad_size),:] = R
+
+	return corr
+
+
 
 def correlation(CA, CB, size) :
 	n = CA.shape[2]
