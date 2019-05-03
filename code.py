@@ -6,6 +6,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
+import sys
+import json
+
+def load_options(argv):
+	if len(argv) > 1:
+		filename = argv[1]
+	else:
+		filename = "options.json"
+	
+	with open(filename, 'r') as f:
+		options = json.load(f)
+	
+
+	print(" +++ Running options +++\n")
+	for key, value in options.items():
+		print("\t",key, " : ", value)
+	print("\n +++++++++++++++++++++++\n")
+	return options
+
 
 
 def load(im):
@@ -181,20 +200,23 @@ def display(im, points):
 	plt.show()
 	plt.close()
 
+if __name__ == "__main__" :
 
-VGG19 = models.vgg19(pretrained=True)
+	options = load_options(sys.argv)
 
-imA = load("original_A.png")
-FA = forward_pass(imA, VGG19)
+	VGG19 = models.vgg19(pretrained=True)
 
-imB = load("original_B.png")
-FB = forward_pass(imB, VGG19)
+	imA = load("original_A.png")
+	FA = forward_pass(imA, VGG19)
+
+	imB = load("original_B.png")
+	FB = forward_pass(imB, VGG19)
 
 
-pointsA, pointsB = pyramid_search(FA, FB)
+	pointsA, pointsB = pyramid_search(FA, FB)
 
-display(imA, pointsA)
-display(imB, pointsB)
+	display(imA, pointsA)
+	display(imB, pointsB)
 
 
 
