@@ -1,13 +1,21 @@
 import torchvision.models as models
 from torchvision import transforms
+from network_info import *
+
 
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from PIL import Image
 
 import sys
 import json
+
+
+# save all the options in this dictionary
+options = None
+
 
 def load_options(argv):
 	if len(argv) > 1:
@@ -33,10 +41,34 @@ def load(im):
 	I = transform(I).unsqueeze(0)
 	return I
 
+
+def get_transform(witdh):
+    transform_list = []
+    osize = [witdh, witdh]
+    transform_list.append(transforms.Scale(osize, Image.BICUBIC))
+    transform_list += [transforms.ToTensor(),
+                       transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                            std=[0.229, 0.224, 0.225])]
+
+    return transforms.Compose(transform_list)
+
 def forward_pass(im, net):
+
+	# last output of the layer in the net,
+	# initialize to the image
+	last_activation = im
+
+	# list of the activations at the 
+	# selected layers.
 	activations = [im]
-	for f in net.features :
-		activations.append(f.forward(activations[-1]))
+	
+	# for each layer
+	for index , f in enumerate(net.features) :
+		last_activation = f.forward(last_activation)
+		# if the layer is selected, then append
+		# it to the list.
+		if index in options["layers"]:
+			activations.append(last_activation)
 	return activations
     
 def normalize(FA,FB):
@@ -151,15 +183,31 @@ def bestBuddies(FA, xA, yA, FB, xB, yB):
 radius_list=[4,4,6,6] #use radius_list[l-2] for l=5to2
 l_layer=[5,10,19,28,37] #use l_layer[l-1] for l=5to1
 
-def pyramid_search(FA, FB):
-	R = [[FA[-1], 0, 0, FB[-1], 0, 0]]
+def pyramid_search(FA_list, FB_list):
+
+	# number of layers
+	L = len(options["layers"]) 
+
+	R = [[FA_list[-1], 0, 0, FB_list[-1], 0, 0]]
 	finalA = []
 	finalB = []
 
-	for l in range(4,-1,-1) :
-		print(l)
+	for l in range(L-1,-1,0) :
+		print("### Searching at level : ", l)
 		new_R=[]
 		
+		# get the activations at
+		# the leyer before
+		FA = FA_list[l-1]
+		FB = FB_list[l-1]
+
+		# if not in the last layer
+		# normalize the inputs
+		FA, FB = normalize(FA, FB)
+
+
+		# for every region at the current level
+		# find the best buddies
 		for regions in R:
 			bbA, bbB = bestBuddies(*regions)
 			print(bbA, bbB)
@@ -170,14 +218,14 @@ def pyramid_search(FA, FB):
 			for k in range(len(bbA)):
 				px, py = bbA[k]
 				qx, qy = bbB[k]
-				n = FA[l_layer[l-1]].shape[2]
+				n = FA.shape[2]
 				r = radius_list[l-2]+1
 
 				new_R.append((
-					FA[l_layer[l-1]][:,:,neighbours(2*px, r, n),:][:,:,:,neighbours(2*py, r, n)],
+					FA[:,:,neighbours(2*px, r, n),:][:,:,:,neighbours(2*py, r, n)],
 					2 * px - r//2,
 					2 * py - r//2,
-					FB[l_layer[l-1]][:,:,neighbours(2*qx, r, n),:][:,:,:,neighbours(2*qy, r, n)],
+					FB[:,:,neighbours(2*qx, r, n),:][:,:,:,neighbours(2*qy, r, n)],
 					2 * qx - r//2,
 					2 * qy - r//2,
 				))
@@ -200,11 +248,20 @@ def display(im, points):
 	plt.show()
 	plt.close()
 
+
+
 if __name__ == "__main__" :
 
+	# assign the global variable option with the
+	# options contained in the option file
 	options = load_options(sys.argv)
 
+
+	# load the model
 	VGG19 = models.vgg19(pretrained=True)
+
+	# print some informations about the network
+
 
 	imA = load("original_A.png")
 	FA = forward_pass(imA, VGG19)
@@ -212,6 +269,13 @@ if __name__ == "__main__" :
 	imB = load("original_B.png")
 	FB = forward_pass(imB, VGG19)
 
+
+	# print sizes of intermediate "images"
+	net_info(VGG19, imA)
+	intermediate_shapes(FA)
+
+
+	sys.exit(1)
 
 	pointsA, pointsB = pyramid_search(FA, FB)
 
