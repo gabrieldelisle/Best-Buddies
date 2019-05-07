@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from PIL import Image
+import torch.nn.functional as functional
 
 import sys
 import json
@@ -90,12 +91,25 @@ def neighbours(x, size, n) :
 def correlation_conv(CA, CB, neighbours_size=3, sum_over_neigh= False):
 	# number of pixels in the region
 	n = CA.shape[2]
+	m = CA.shape[3]
+
+	nb = CB.shape[2]
+	mb = CB.shape[3]
+
+	print("CA: ",CA.shape)
+	print("CB: ",CB.shape)
+
+
 	pad_list = tuple([neighbours_size // 2,neighbours_size // 2,neighbours_size // 2,neighbours_size // 2])
 	pad_size = neighbours_size // 2
 	# initialize matrix of correlations
-	corr = torch.zeros((n*n,n*n))
+	corr = torch.zeros((n*m,nb*mb))
+
+	#print("size of corr matrix :", corr.shape)
+
 	ones_filter = torch.ones((1,1,neighbours_size,neighbours_size))
-	print(ones_filter.shape)
+	
+	#print("Using filter of size : ", ones_filter.shape, " padding : ", pad_size)
 	# normalize CA and CB
 
 	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (CA,CA)))
@@ -111,15 +125,22 @@ def correlation_conv(CA, CB, neighbours_size=3, sum_over_neigh= False):
 
 	# for each pixel in image A (not starting from the padded region)
 	for px in range(pad_size,n + pad_size):
-		for py in range(pad_size,n + pad_size):
+		for py in range(pad_size,m + pad_size):
 			
 			# find the patch of neighbouring pixels
-			ca = CAnorm[:,:,neighbours(px, neighbours_size, n+pad_size+1),:][:,:,:,neighbours(py, neighbours_size, n+pad_size+1)]
+			ca = CAnorm[:,:,neighbours(px, neighbours_size, n+2*pad_size),:][:,:,:,neighbours(py, neighbours_size, m+2*pad_size)]
+			
 			## compute correlation
 			# here there is no need to flip the image
 			# since the convolution is implemented as correlation
 			R = functional.conv2d(CBnorm, ca.contiguous(), padding=0).data
-			
+			if ca.shape[2] != ca.shape[3]:
+				print(px,py,neighbours_size, n, m, pad_size)
+				print(neighbours(px, neighbours_size, n+2*pad_size))
+				print(neighbours(py, neighbours_size, m+2*pad_size))
+				print()
+				print(CBnorm.shape, ca.shape)
+				print("After convolution ", R.shape)
 			# if option is set, sum the correlations in the 
 			# neighbouring region
 			if sum_over_neigh:
@@ -129,7 +150,7 @@ def correlation_conv(CA, CB, neighbours_size=3, sum_over_neigh= False):
 			# reshape to fit the result in the correlation matrix
 			R = R.reshape(1, -1)
 			R = R.squeeze()
-			corr[(px-pad_size) * n + (py - pad_size),:] = R
+			corr[(px-pad_size) * m + (py - pad_size),:] = R
 
 	return corr
 
@@ -154,26 +175,46 @@ def correlation(CA, CB, size) :
 	return corr
 
 
-def bestBuddies(FA, xA, yA, FB, xB, yB):
-	n = FA.shape[2]
+def bestBuddies(FA, xA, yA, FB, xB, yB, radius):
+	na = FA.shape[2]
+	ma = FA.shape[3]
 
-	CA, CB = normalize(FA, FB)
-	corr = correlation(CA, CB, 3)
+
+	nb = FB.shape[2]
+	mb = FB.shape[3]
+
+	CA, CB = (FA, FB)
+
+	#CA, CB = normalize(FA, FB)
+	corr = correlation_conv(CA, CB, radius)
 	# filter for keeping only significative activations
 	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FA,FA)))
 	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FB,FB)))
 	HA = (normA - torch.min(normA)) / (torch.max(normA) - torch.min(normA))
 	HB = (normB - torch.min(normB)) / (torch.max(normB) - torch.min(normB))
-	gamma = 0#.05
+	gamma = options["threshold"]
 	bbA = []
 	bbB = []
 
-	
+	#print(
+	#	"CA", CA.shape,"\n",
+	#	"CB", CB.shape,"\n",
+	#	"HA", HA.shape,"\n",
+	#	"HB", HB.shape,"\n",
+	#	"corr", corr.shape
+	#	)
+
+
+
 	for p in range(corr.shape[0]):
 		q = torch.argmax(corr[p,:]).item()
 		if torch.argmax(corr[:,q]).item() == p:
-			px, py = p//n, p%n
-			qx, qy = q//n, q%n
+			px, py = p//ma, p%ma
+			qx, qy = q//mb, q%mb
+
+			# print("p)",p , "-->", (px,py))
+			# print("q)",q , "-->", (qx,qy))
+
 			if HA[px, py] > gamma and HB[qx, qy] > gamma: 
 				bbA.append((px + xA, py + yA))
 				bbB.append((qx + xB, qy + yB))
@@ -186,13 +227,13 @@ l_layer=[5,10,19,28,37] #use l_layer[l-1] for l=5to1
 def pyramid_search(FA_list, FB_list):
 
 	# number of layers
-	L = len(options["layers"]) 
+	L = len(FA_list) 
 
 	R = [[FA_list[-1], 0, 0, FB_list[-1], 0, 0]]
 	finalA = []
 	finalB = []
 
-	for l in range(L-1,-1,0) :
+	for l in range(L-1,0,-1) :
 		print("### Searching at level : ", l)
 		new_R=[]
 		
@@ -201,49 +242,63 @@ def pyramid_search(FA_list, FB_list):
 		FA = FA_list[l-1]
 		FB = FB_list[l-1]
 
-		# if not in the last layer
-		# normalize the inputs
-		FA, FB = normalize(FA, FB)
-
-
 		# for every region at the current level
 		# find the best buddies
 		for regions in R:
-			bbA, bbB = bestBuddies(*regions)
-			print(bbA, bbB)
-			if l==0:
+			bbA, bbB = bestBuddies(*regions, radius=options["patch_radius"][l-1])
+			#print(bbA, bbB)
+			
+			# if in the first layer
+			# then save the best buddies
+			if l==1:
 				finalA += bbA
 				finalB += bbB
 
-			for k in range(len(bbA)):
-				px, py = bbA[k]
-				qx, qy = bbB[k]
-				n = FA.shape[2]
-				r = radius_list[l-2]+1
+			# if not in the last layer compute the 
+			# regions in the above layer
 
-				new_R.append((
-					FA[:,:,neighbours(2*px, r, n),:][:,:,:,neighbours(2*py, r, n)],
-					2 * px - r//2,
-					2 * py - r//2,
-					FB[:,:,neighbours(2*qx, r, n),:][:,:,:,neighbours(2*qy, r, n)],
-					2 * qx - r//2,
-					2 * qy - r//2,
-				))
-		R = new_R
+			if l > 1:
+				for k in range(len(bbA)):
+					px, py = bbA[k]
+					qx, qy = bbB[k]
+					na = FA.shape[2]
+					ma = FA.shape[3]
+					nb = FB.shape[2]
+					mb = FB.shape[3]
+					r = radius_list[l-2]+1
+
+					# the normalization is done 
+					# patch wise
+					R1 = FA[:,:,neighbours(2*px, r, na),:][:,:,:,neighbours(2*py, r, ma)]
+					R2 = FB[:,:,neighbours(2*qx, r, nb),:][:,:,:,neighbours(2*qy, r, mb)]
+					
+					# if the regions are too small ignore them
+					if R1.shape[2] < 2 or R1.shape[3] < 2 or R2.shape[2] < 2 or R2.shape[3] < 2: 
+						continue
+
+					R1, R2 = normalize(R1, R2)
+					# print("for ",(px,py), " , ",(qx,qy))
+					# print(R1.shape)
+					# print(R2.shape)
+					new_R.append(( R1, 2 * px - (r//2), 2 * py - (r//2),
+						R2, 2 * qx - (r//2), 2 * qy - (r//2)))
+				
+					#new_R.append(( R1, 2 * px, 2 * py,
+					#	R2, 2 * qx, 2 * qy))
+				R = new_R
+
 	return finalA, finalB
-
 
 def display(im, points):
 	r = 5
 	n = im.shape[0]
 	print(im.shape)
-	im = im.view(3,224,224)
 	for px,py in points:
-		im[:,neighbours(px, r, n),:][:,:,neighbours(py, r, n)] = 0
-	im = im.numpy()
-	im = im.transpose([2,1,0])
-	print(im.shape)
-		
+		print(px, py)
+		for u in neighbours(px, r, n) :
+			for v in neighbours(py, r, n) :
+				im[u,v] = np.array([1,0,0])
+
 	plt.imshow(im)
 	plt.show()
 	plt.close()
@@ -275,10 +330,9 @@ if __name__ == "__main__" :
 	intermediate_shapes(FA)
 
 
-	sys.exit(1)
-
 	pointsA, pointsB = pyramid_search(FA, FB)
-
+	imA = cv2.imread("original_A.png")
+	imB = cv2.imread("original_B.png")
 	display(imA, pointsA)
 	display(imB, pointsB)
 
