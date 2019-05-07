@@ -174,21 +174,32 @@ def correlation(CA, CB, size) :
 	return corr
 
 
-def bestBuddies(FA, xA, yA, FB, xB, yB, radius):
-	na = FA.shape[2]
-	ma = FA.shape[3]
+def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, radius, norm=True):
+	px1, py1, px2, py2 = FA_e
+	qx1, qy1, qx2, qy2 = FB_e
+	
+	# extract regions
+	fA = FA[:,:,px1:px2, :][:,:,:, py1:py2]
+	fB = FB[:,:,qx1:qx2, :][:,:,:, qy1:qy2]
 
+	print(fA.shape)
 
-	nb = FB.shape[2]
-	mb = FB.shape[3]
+	na = fA.shape[2]
+	ma = fA.shape[3]
 
-	CA, CB = (FA, FB)
+	if norm:
+		CA, CB = normalize(fA, fB)
+	else:
+		CA, CB = (fA, fB)
 
-	#CA, CB = normalize(FA, FB)
+	nb = fB.shape[2]
+	mb = fB.shape[3]
+
+	#CA, CB = normalize(fA, FB)
 	corr = correlation_conv(CA, CB, radius)
 	# filter for keeping only significative activations
-	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FA,FA)))
-	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (FB,FB)))
+	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (fA,fA)))
+	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (fB,fB)))
 	HA = (normA - torch.min(normA)) / (torch.max(normA) - torch.min(normA))
 	HB = (normB - torch.min(normB)) / (torch.max(normB) - torch.min(normB))
 	gamma = options["threshold"]
@@ -228,7 +239,9 @@ def pyramid_search(FA_list, FB_list):
 	# number of layers
 	L = len(FA_list) 
 
-	R = [[FA_list[-1], 0, 0, FB_list[-1], 0, 0]]
+	A_extremes = (0,0, FA_list[-1].shape[2], FA_list[-1].shape[3])
+	B_extremes = (0,0, FB_list[-1].shape[2], FB_list[-1].shape[3])
+	R = [[A_extremes, 0, 0, B_extremes , 0, 0]]
 	finalA = []
 	finalB = []
 
@@ -244,7 +257,7 @@ def pyramid_search(FA_list, FB_list):
 		# for every region at the current level
 		# find the best buddies
 		for regions in R:
-			bbA, bbB = bestBuddies(*regions, radius=options["patch_radius"][l-1])
+			bbA, bbB = bestBuddies(FA_list[l], FB_list[l], *regions, radius=options["patch_radius"][l-1], norm=(l!=L-1))
 			#print(bbA, bbB)
 			
 			# if in the first layer
@@ -268,19 +281,25 @@ def pyramid_search(FA_list, FB_list):
 
 					# the normalization is done 
 					# patch wise
-					R1 = FA[:,:,neighbours(2*px, r, na),:][:,:,:,neighbours(2*py, r, ma)]
-					R2 = FB[:,:,neighbours(2*qx, r, nb),:][:,:,:,neighbours(2*qy, r, mb)]
-					
-					# if the regions are too small ignore them
-					if R1.shape[2] < 2 or R1.shape[3] < 2 or R2.shape[2] < 2 or R2.shape[3] < 2: 
-						continue
+					R1_Nx = neighbours(2*px, r, na)
+					R1_Ny = neighbours(2*py, r, ma)
 
-					R1, R2 = normalize(R1, R2)
+
+					R2_Nx = neighbours(2*qx, r, nb)
+					R2_Ny = neighbours(2*qy, r, mb)
+
+
+					# if the regions are too small ignore them
+					if len(R1_Nx) < 2 or len(R2_Nx) < 2 or len(R1_Ny) < 2 or len(R2_Ny) < 2 : 
+						continue
+					else:
+						R1_extremes = (R1_Nx[0],R1_Ny[0], R1_Nx[-1] + 1, R1_Ny[-1] + 1) 
+						R2_extremes = (R2_Nx[0],R2_Ny[0], R2_Nx[-1] + 1, R2_Ny[-1] + 1) 
 					# print("for ",(px,py), " , ",(qx,qy))
 					# print(R1.shape)
 					# print(R2.shape)
-					new_R.append(( R1, 2 * px - (r//2), 2 * py - (r//2),
-						R2, 2 * qx - (r//2), 2 * qy - (r//2)))
+					new_R.append(( R1_extremes, 2 * px - (r//2), 2 * py - (r//2),
+						R2_extremes, 2 * qx - (r//2), 2 * qy - (r//2)))
 				
 					#new_R.append(( R1, 2 * px, 2 * py,
 					#	R2, 2 * qx, 2 * qy))
