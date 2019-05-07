@@ -182,8 +182,6 @@ def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, radius, norm=True):
 	fA = FA[:,:,px1:px2, :][:,:,:, py1:py2]
 	fB = FB[:,:,qx1:qx2, :][:,:,:, qy1:qy2]
 
-	print(fA.shape)
-
 	na = fA.shape[2]
 	ma = fA.shape[3]
 
@@ -246,7 +244,7 @@ def pyramid_search(FA_list, FB_list):
 	finalB = []
 
 	for l in range(L-1,0,-1) :
-		print("### Searching at level : ", l)
+		print("\n### Searching at level :", l)
 		new_R=[]
 		
 		# get the activations at
@@ -254,12 +252,14 @@ def pyramid_search(FA_list, FB_list):
 		FA = FA_list[l-1]
 		FB = FB_list[l-1]
 
+
+		tot_regions = len(R)
 		# for every region at the current level
 		# find the best buddies
-		for regions in R:
+		for idx, regions in enumerate(R):
 			bbA, bbB = bestBuddies(FA_list[l], FB_list[l], *regions, radius=options["patch_radius"][l-1], norm=(l!=L-1))
 			#print(bbA, bbB)
-			
+			progress(idx + 1, tot_regions)
 			# if in the first layer
 			# then save the best buddies
 			if l==1:
@@ -290,7 +290,7 @@ def pyramid_search(FA_list, FB_list):
 
 
 					# if the regions are too small ignore them
-					if len(R1_Nx) < 2 or len(R2_Nx) < 2 or len(R1_Ny) < 2 or len(R2_Ny) < 2 : 
+					if len(R1_Nx) < 2 or len(R2_Nx) < 2 or len(R1_Ny) < 2 or len(R2_Ny) < 2 :
 						continue
 					else:
 						R1_extremes = (R1_Nx[0],R1_Ny[0], R1_Nx[-1] + 1, R1_Ny[-1] + 1) 
@@ -298,30 +298,33 @@ def pyramid_search(FA_list, FB_list):
 					# print("for ",(px,py), " , ",(qx,qy))
 					# print(R1.shape)
 					# print(R2.shape)
-					new_R.append(( R1_extremes, 2 * px - (r//2), 2 * py - (r//2),
-						R2_extremes, 2 * qx - (r//2), 2 * qy - (r//2)))
+					Xa = max(0,2 * px - (r//2))
+					Ya = max(0,2 * py - (r//2))
+					Xb = max(0,2 * qx - (r//2))
+					Yb = max(0,2 * qy - (r//2))
+					new_R.append(( R1_extremes, Xa, Ya,
+						R2_extremes,Xb , Yb))
 				
 					#new_R.append(( R1, 2 * px, 2 * py,
 					#	R2, 2 * qx, 2 * qy))
 				R = new_R
 
-	return finalA, finalB
+	print("\n\nNumber of BB found :", len(finalA))
+	return k_means_centers(finalA), k_means_centers(finalB)
+
+def k_means_centers(points):
+	points = np.array([[u for u in v] for v in points])
+	return KMeans(n_clusters=min(options["clusters"], len(points)), random_state=0).fit(points).cluster_centers_
 
 def display(im, points):
-	points = np.array([[u for u in v] for v in points])
-	points = KMeans(n_clusters=options["clusters"], random_state=0).fit(points).cluster_centers_
 	r = 3
 	n = im.shape[0]
-	print(im.shape)
 	for px,py in points:
 		for u in neighbours(int(px), r, n) :
 			for v in neighbours(int(py), r, n) :
-				print(u,v)
 				im[round(u),round(v)] = np.array([255,0,0])
 
-	plt.imshow(im)
-	plt.show()
-	plt.close()
+	return im
 
 
 
@@ -337,8 +340,8 @@ if __name__ == "__main__" :
 
 	# print some informations about the network
 
-	nameA = "pietro.png"
-	nameB = "gab.png"
+	nameA = "original_A.png"
+	nameB = "original_B.png"
 
 	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
@@ -353,13 +356,21 @@ if __name__ == "__main__" :
 
 
 	pointsA, pointsB = pyramid_search(FA, FB)
+
+
+
+
 	imA = np.array(Image.open(nameA).convert('RGB'))
 
 	imB = np.array(Image.open(nameB).convert('RGB'))
 
-	display(imA, pointsA)
-	display(imB, pointsB)
-
+	# displays the centers on the images
+	plt.subplot(1, 2, 1)
+	plt.imshow(display(imA, pointsA))
+	plt.subplot(1, 2, 2)
+	plt.imshow(display(imB, pointsB)) 
+	plt.show()
+	plt.close()
 
 
 
