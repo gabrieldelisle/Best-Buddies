@@ -4,6 +4,7 @@ from network_info import *
 from sklearn.cluster import KMeans
 
 import numpy as np
+from numpy.linalg import pinv
 import matplotlib.pyplot as plt
 import torch
 from PIL import Image
@@ -79,6 +80,15 @@ def normalize(FA,FB):
 	sigma_B = torch.std(FB)
 	sigma = (sigma_A + sigma_B)/2
 	return (FA - mu_A) / sigma_A * sigma + mu, (FB - mu_B) / sigma_B * sigma + mu 
+
+def normalize_style(imA, imB):
+	mu_A = np.mean(imA, axis=(0,1)).reshape(1,1,-1)
+	mu_B = np.mean(imB, axis=(0,1)).reshape(1,1,-1)
+	mu = (mu_A + mu_B)/2
+	sigma_A = np.std(imA, axis=(0,1)).reshape(1,1,-1)
+	sigma_B = np.std(imB, axis=(0,1)).reshape(1,1,-1)
+	sigma = (sigma_A + sigma_B)/2
+	return (imA - mu_A) / sigma_A * sigma + mu, (imB - mu_B) / sigma_B * sigma + mu 
 
 
 def neighbours(x, size, n) :
@@ -310,21 +320,45 @@ def pyramid_search(FA_list, FB_list):
 				R = new_R
 
 	print("\n\nNumber of BB found :", len(finalA))
-	return k_means_centers(finalA), k_means_centers(finalB)
+	return np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
 
-def k_means_centers(points):
-	points = np.array([[u for u in v] for v in points])
-	return KMeans(n_clusters=min(options["clusters"], len(points)), random_state=0).fit(points).cluster_centers_
 
 def display(im, points):
+	centers = KMeans(n_clusters=min(options["clusters"], len(points)), random_state=0).fit(points).cluster_centers_
 	r = 3
 	n = im.shape[0]
-	for px,py in points:
+	for px,py in centers:
 		for u in neighbours(int(px), r, n) :
 			for v in neighbours(int(py), r, n) :
 				im[round(u),round(v)] = np.array([255,0,0])
 
 	return im
+
+def merge(imA, pointsA, imB, pointsB):
+	#merge A on B
+	X = np.array([[u for u in v]+[1] for v in pointsA])
+
+
+	print(np.sum((pointsA - pointsB)**2))
+	W = pinv(X.T.dot(X)).dot(X.T).dot(pointsB)
+
+	print(np.sum((X.dot(W) - pointsB)**2))
+	print(W)
+
+	def func(i,j):
+		x = np.array([[i,j,1]])
+		return x.dot(W)
+
+	for i in range(imB.shape[0]):
+		for j in range(imB.shape[1]):
+			u,v = func(i,j)[0]
+			u = int(round(u))
+			v = int(round(v))
+			if u>=0 and u<imB.shape[0] and v>=0 and v<imB.shape[1]:
+				imA[i,j] = (imA[i,j] + imB[u,v])/2
+
+	plt.imshow(imA)
+	plt.show()
 
 
 
@@ -371,6 +405,15 @@ if __name__ == "__main__" :
 	plt.imshow(display(imB, pointsB)) 
 	plt.show()
 	plt.close()
+
+	imA = np.array(Image.open(nameA).convert('RGB'))
+	imB = np.array(Image.open(nameB).convert('RGB'))
+	imA = imA.astype(float)/255
+	imB = imB.astype(float)/255
+	#imA, imB = normalize_style(imA, imB)
+
+	merge(imA, pointsA, imB, pointsB)
+
 
 
 
