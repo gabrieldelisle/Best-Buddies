@@ -1,9 +1,8 @@
 import torchvision.models as models
 from torchvision import transforms
 from network_info import *
+from sklearn.cluster import KMeans
 
-
-import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -96,8 +95,8 @@ def correlation_conv(CA, CB, neighbours_size=3, sum_over_neigh= False):
 	nb = CB.shape[2]
 	mb = CB.shape[3]
 
-	print("CA: ",CA.shape)
-	print("CB: ",CB.shape)
+	# print("CA: ",CA.shape)
+	# print("CB: ",CB.shape)
 
 
 	pad_list = tuple([neighbours_size // 2,neighbours_size // 2,neighbours_size // 2,neighbours_size // 2])
@@ -290,14 +289,16 @@ def pyramid_search(FA_list, FB_list):
 	return finalA, finalB
 
 def display(im, points):
-	r = 5
+	points = np.array([[u for u in v] for v in points])
+	points = KMeans(n_clusters=options["clusters"], random_state=0).fit(points).cluster_centers_
+	r = 3
 	n = im.shape[0]
 	print(im.shape)
 	for px,py in points:
-		print(px, py)
-		for u in neighbours(px, r, n) :
-			for v in neighbours(py, r, n) :
-				im[u,v] = np.array([1,0,0])
+		for u in neighbours(int(px), r, n) :
+			for v in neighbours(int(py), r, n) :
+				print(u,v)
+				im[round(u),round(v)] = np.array([255,0,0])
 
 	plt.imshow(im)
 	plt.show()
@@ -317,11 +318,13 @@ if __name__ == "__main__" :
 
 	# print some informations about the network
 
+	nameA = "pietro.png"
+	nameB = "gab.png"
 
-	imA = load("original_A.png")
+	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
 
-	imB = load("original_B.png")
+	imB = load(nameB)
 	FB = forward_pass(imB, VGG19)
 
 
@@ -331,8 +334,10 @@ if __name__ == "__main__" :
 
 
 	pointsA, pointsB = pyramid_search(FA, FB)
-	imA = cv2.imread("original_A.png")
-	imB = cv2.imread("original_B.png")
+	imA = np.array(Image.open(nameA).convert('RGB'))
+
+	imB = np.array(Image.open(nameB).convert('RGB'))
+
 	display(imA, pointsA)
 	display(imB, pointsB)
 
