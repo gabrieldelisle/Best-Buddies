@@ -184,7 +184,7 @@ def correlation(CA, CB, size) :
 	return corr
 
 
-def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, radius, norm=True):
+def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, prevV, radius, norm=True):
 	px1, py1, px2, py2 = FA_e
 	qx1, qy1, qx2, qy2 = FB_e
 	
@@ -213,7 +213,7 @@ def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, radius, norm=True):
 	gamma = options["threshold"]
 	bbA = []
 	bbB = []
-
+	V = []
 	#print(
 	#	"CA", CA.shape,"\n",
 	#	"CB", CB.shape,"\n",
@@ -236,7 +236,8 @@ def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, radius, norm=True):
 			if HA[px, py] > gamma and HB[qx, qy] > gamma: 
 				bbA.append((px + xA, py + yA))
 				bbB.append((qx + xB, qy + yB))
-	return bbA, bbB
+				V.append(prevV + HA[px, py] +HB[qx, qy])
+	return bbA, bbB, V
 
 
 radius_list=[4,4,6,6] #use radius_list[l-2] for l=5to2
@@ -249,9 +250,11 @@ def pyramid_search(FA_list, FB_list):
 
 	A_extremes = (0,0, FA_list[-1].shape[2], FA_list[-1].shape[3])
 	B_extremes = (0,0, FB_list[-1].shape[2], FB_list[-1].shape[3])
-	R = [[A_extremes, 0, 0, B_extremes , 0, 0]]
+	prevV = 0
+	R = [[A_extremes, 0, 0, B_extremes , 0, 0, prevV]]
 	finalA = []
 	finalB = []
+	finalV = []
 
 	for l in range(L-1,0,-1) :
 		print("\n### Searching at level :", l)
@@ -267,7 +270,7 @@ def pyramid_search(FA_list, FB_list):
 		# for every region at the current level
 		# find the best buddies
 		for idx, regions in enumerate(R):
-			bbA, bbB = bestBuddies(FA_list[l], FB_list[l], *regions, radius=options["patch_radius"][l-1], norm=(l!=L-1))
+			bbA, bbB, V = bestBuddies(FA_list[l], FB_list[l], *regions, radius=options["patch_radius"][l-1], norm=(l!=L-1))
 			#print(bbA, bbB)
 			progress(idx + 1, tot_regions)
 			# if in the first layer
@@ -275,6 +278,7 @@ def pyramid_search(FA_list, FB_list):
 			if l==1:
 				finalA += bbA
 				finalB += bbB
+				finalV += V 
 
 			# if not in the last layer compute the 
 			# regions in the above layer
@@ -313,21 +317,34 @@ def pyramid_search(FA_list, FB_list):
 					Xb = max(0,2 * qx - (r//2))
 					Yb = max(0,2 * qy - (r//2))
 					new_R.append(( R1_extremes, Xa, Ya,
-						R2_extremes,Xb , Yb))
+						R2_extremes,Xb , Yb, V[k]))
 				
 					#new_R.append(( R1, 2 * px, 2 * py,
 					#	R2, 2 * qx, 2 * qy))
 				R = new_R
 
 	print("\n\nNumber of BB found :", len(finalA))
-	return np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
+	finalA, finalB = np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
+	#centers = KMeans(n_clusters=min(options["clusters"], len(pointsA)), random_state=0).fit(pointsA).cluster_centers_
+	#centers = KMeans(n_clusters=min(options["clusters"], len(finalA)), random_state=0).fit_predict(finalA)
+	final4D = np.array([[*u, *v] for u,v in zip(finalA, finalB)])
+	centers = KMeans(n_clusters=min(options["clusters"], len(final4D)), random_state=0).fit_predict(final4D)
 
+	maxs = {}
+	for i,c in enumerate(centers):
+		if c not in maxs:
+			maxs[c] = i
+		elif finalV[maxs[c]] < finalV[i]:
+			maxs[c] = i
+
+	pointsA = [finalA[i] for i in maxs.values()]
+	pointsB = [finalB[i] for i in maxs.values()]
+	return pointsA, pointsB
 
 def display(im, points):
-	centers = KMeans(n_clusters=min(options["clusters"], len(points)), random_state=0).fit(points).cluster_centers_
 	r = 3
 	n = im.shape[0]
-	for px,py in centers:
+	for px,py in points:
 		for u in neighbours(int(px), r, n) :
 			for v in neighbours(int(py), r, n) :
 				im[round(u),round(v)] = np.array([255,0,0])
@@ -339,11 +356,7 @@ def merge(imA, pointsA, imB, pointsB):
 	X = np.array([[u for u in v]+[1] for v in pointsA])
 
 
-	print(np.sum((pointsA - pointsB)**2))
 	W = pinv(X.T.dot(X)).dot(X.T).dot(pointsB)
-
-	print(np.sum((X.dot(W) - pointsB)**2))
-	print(W)
 
 	def func(i,j):
 		x = np.array([[i,j,1]])
