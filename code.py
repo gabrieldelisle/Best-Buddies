@@ -286,10 +286,11 @@ def pyramid_search(FA_list, FB_list):
 
 			# if not in the last layer compute the 
 			# regions in the above layer
-
+		print("\n\nNumber of BB found :", len(finalA))
+		finalA, finalB = k_means(finalA, finalB, finalV, options["clusters"][l-1])
 
 		if l > 1:
-			finalA, finalB = k_means(finalA, finalB, finalV, options["clusters"])
+			
 			for k in range(len(finalA)):
 				px, py = finalA[k]
 				qx, qy = finalB[k]
@@ -328,11 +329,10 @@ def pyramid_search(FA_list, FB_list):
 					#new_R.append(( R1, 2 * px, 2 * py,
 					#	R2, 2 * qx, 2 * qy))
 				R = new_R
-		if l==1:
-			finalA, finalB = k_means(finalA, finalB, finalV, options["display_clusters"])
 
 
-	print("\n\nNumber of BB found :", len(finalA))
+
+		
 	
 	return finalA, finalB
 
@@ -356,13 +356,13 @@ def k_means(finalA, finalB, finalV, n_clusters):
 
 
 
-def display(im, points):
+def display(im, points, colors):
 	r = 3
 	n = im.shape[0]
-	for px,py in points:
+	for i, (px,py) in enumerate(points):
 		for u in neighbours(int(px), r, n) :
 			for v in neighbours(int(py), r, n) :
-				im[round(u),round(v)] = np.array([255,0,0])
+				im[round(u),round(v)] = colors[i]
 
 	return im
 
@@ -430,10 +430,12 @@ if __name__ == "__main__" :
 	imB = np.array(Image.open(nameB).convert('RGB'))
 
 	# displays the centers on the images
+
+	colors = np.random.randint(0,255,(len(pointsA),3))
 	plt.subplot(1, 2, 1)
-	plt.imshow(display(imA, pointsA))
+	plt.imshow(display(imA, pointsA, colors))
 	plt.subplot(1, 2, 2)
-	plt.imshow(display(imB, pointsB)) 
+	plt.imshow(display(imB, pointsB, colors)) 
 	plt.show()
 	plt.close()
 
