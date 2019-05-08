@@ -288,25 +288,8 @@ def pyramid_search(FA_list, FB_list):
 			# regions in the above layer
 
 
-
-		finalA, finalB = np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
-		#centers = KMeans(n_clusters=min(options["clusters"], len(pointsA)), random_state=0).fit(pointsA).cluster_centers_
-		#centers = KMeans(n_clusters=min(options["clusters"], len(finalA)), random_state=0).fit_predict(finalA)
-		final4D = np.array([[*u, *v] for u,v in zip(finalA, finalB)])
-		centers = KMeans(n_clusters=min(options["clusters"], len(final4D)), random_state=0).fit_predict(final4D)
-
-		maxs = {}
-		for i,c in enumerate(centers):
-			if c not in maxs:
-				maxs[c] = i
-			elif finalV[maxs[c]] < finalV[i]:
-				maxs[c] = i
-
-		finalA = [finalA[i] for i in maxs.values()]
-		finalB = [finalB[i] for i in maxs.values()]
-
-
 		if l > 1:
+			finalA, finalB = k_means(finalA, finalB, finalV, options["clusters"])
 			for k in range(len(finalA)):
 				px, py = finalA[k]
 				qx, qy = finalB[k]
@@ -345,10 +328,32 @@ def pyramid_search(FA_list, FB_list):
 					#new_R.append(( R1, 2 * px, 2 * py,
 					#	R2, 2 * qx, 2 * qy))
 				R = new_R
+		if l==1:
+			finalA, finalB = k_means(finalA, finalB, finalV, options["display_clusters"])
+
 
 	print("\n\nNumber of BB found :", len(finalA))
 	
 	return finalA, finalB
+
+def k_means(finalA, finalB, finalV, n_clusters):
+	finalA, finalB = np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
+	#centers = KMeans(n_clusters=min(options["clusters"], len(pointsA)), random_state=0).fit(pointsA).cluster_centers_
+	#centers = KMeans(n_clusters=min(options["clusters"], len(finalA)), random_state=0).fit_predict(finalA)
+	final4D = np.array([[*u, *v] for u,v in zip(finalA, finalB)])
+	centers = KMeans(n_clusters=min(n_clusters, len(final4D)), random_state=0).fit_predict(final4D)
+
+	maxs = {}
+	for i,c in enumerate(centers):
+		if c not in maxs:
+			maxs[c] = i
+		elif finalV[maxs[c]] < finalV[i]:
+			maxs[c] = i
+
+	finalA = [finalA[i] for i in maxs.values()]
+	finalB = [finalB[i] for i in maxs.values()]
+	return finalA, finalB
+
 
 
 def display(im, points):
