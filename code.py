@@ -252,9 +252,7 @@ def pyramid_search(FA_list, FB_list):
 	B_extremes = (0,0, FB_list[-1].shape[2], FB_list[-1].shape[3])
 	prevV = 0
 	R = [[A_extremes, 0, 0, B_extremes , 0, 0, prevV]]
-	finalA = []
-	finalB = []
-	finalV = []
+	
 
 	for l in range(L-1,0,-1) :
 		print("\n### Searching at level :", l)
@@ -265,81 +263,93 @@ def pyramid_search(FA_list, FB_list):
 		FA = FA_list[l-1]
 		FB = FB_list[l-1]
 
+		finalA = []
+		finalB = []
+		finalV = []
+
 
 		tot_regions = len(R)
 		# for every region at the current level
 		# find the best buddies
 		for idx, regions in enumerate(R):
 			bbA, bbB, V = bestBuddies(FA_list[l], FB_list[l], *regions, radius=options["patch_radius"][l-1], norm=(l!=L-1))
+
 			#print(bbA, bbB)
 			progress(idx + 1, tot_regions)
 			# if in the first layer
 			# then save the best buddies
-			if l==1:
-				finalA += bbA
-				finalB += bbB
-				finalV += V 
+
+
+			finalA += bbA
+			finalB += bbB
+			finalV += V 
 
 			# if not in the last layer compute the 
 			# regions in the above layer
 
-			if l > 1:
-				for k in range(len(bbA)):
-					px, py = bbA[k]
-					qx, qy = bbB[k]
-					na = FA.shape[2]
-					ma = FA.shape[3]
-					nb = FB.shape[2]
-					mb = FB.shape[3]
-					r = radius_list[l-2]+1
-
-					# the normalization is done 
-					# patch wise
-					R1_Nx = neighbours(2*px, r, na)
-					R1_Ny = neighbours(2*py, r, ma)
 
 
-					R2_Nx = neighbours(2*qx, r, nb)
-					R2_Ny = neighbours(2*qy, r, mb)
+		finalA, finalB = np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
+		#centers = KMeans(n_clusters=min(options["clusters"], len(pointsA)), random_state=0).fit(pointsA).cluster_centers_
+		#centers = KMeans(n_clusters=min(options["clusters"], len(finalA)), random_state=0).fit_predict(finalA)
+		final4D = np.array([[*u, *v] for u,v in zip(finalA, finalB)])
+		centers = KMeans(n_clusters=min(options["clusters"], len(final4D)), random_state=0).fit_predict(final4D)
+
+		maxs = {}
+		for i,c in enumerate(centers):
+			if c not in maxs:
+				maxs[c] = i
+			elif finalV[maxs[c]] < finalV[i]:
+				maxs[c] = i
+
+		finalA = [finalA[i] for i in maxs.values()]
+		finalB = [finalB[i] for i in maxs.values()]
 
 
-					# if the regions are too small ignore them
-					if len(R1_Nx) < 2 or len(R2_Nx) < 2 or len(R1_Ny) < 2 or len(R2_Ny) < 2 :
-						continue
-					else:
-						R1_extremes = (R1_Nx[0],R1_Ny[0], R1_Nx[-1] + 1, R1_Ny[-1] + 1) 
-						R2_extremes = (R2_Nx[0],R2_Ny[0], R2_Nx[-1] + 1, R2_Ny[-1] + 1) 
-					# print("for ",(px,py), " , ",(qx,qy))
-					# print(R1.shape)
-					# print(R2.shape)
-					Xa = max(0,2 * px - (r//2))
-					Ya = max(0,2 * py - (r//2))
-					Xb = max(0,2 * qx - (r//2))
-					Yb = max(0,2 * qy - (r//2))
-					new_R.append(( R1_extremes, Xa, Ya,
-						R2_extremes,Xb , Yb, V[k]))
+		if l > 1:
+			for k in range(len(finalA)):
+				px, py = finalA[k]
+				qx, qy = finalB[k]
+				na = FA.shape[2]
+				ma = FA.shape[3]
+				nb = FB.shape[2]
+				mb = FB.shape[3]
+				r = radius_list[l-2]+1
+
+				# the normalization is done 
+				# patch wise
+				R1_Nx = neighbours(2*px, r, na)
+				R1_Ny = neighbours(2*py, r, ma)
+
+
+				R2_Nx = neighbours(2*qx, r, nb)
+				R2_Ny = neighbours(2*qy, r, mb)
+
+
+				# if the regions are too small ignore them
+				if len(R1_Nx) < 2 or len(R2_Nx) < 2 or len(R1_Ny) < 2 or len(R2_Ny) < 2 :
+					continue
+				else:
+					R1_extremes = (R1_Nx[0],R1_Ny[0], R1_Nx[-1] + 1, R1_Ny[-1] + 1) 
+					R2_extremes = (R2_Nx[0],R2_Ny[0], R2_Nx[-1] + 1, R2_Ny[-1] + 1) 
+				# print("for ",(px,py), " , ",(qx,qy))
+				# print(R1.shape)
+				# print(R2.shape)
+				Xa = max(0,2 * px - (r//2))
+				Ya = max(0,2 * py - (r//2))
+				Xb = max(0,2 * qx - (r//2))
+				Yb = max(0,2 * qy - (r//2))
+				new_R.append(( R1_extremes, Xa, Ya,
+					R2_extremes,Xb , Yb, finalV[k]))
 				
 					#new_R.append(( R1, 2 * px, 2 * py,
 					#	R2, 2 * qx, 2 * qy))
 				R = new_R
 
 	print("\n\nNumber of BB found :", len(finalA))
-	finalA, finalB = np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
-	#centers = KMeans(n_clusters=min(options["clusters"], len(pointsA)), random_state=0).fit(pointsA).cluster_centers_
-	#centers = KMeans(n_clusters=min(options["clusters"], len(finalA)), random_state=0).fit_predict(finalA)
-	final4D = np.array([[*u, *v] for u,v in zip(finalA, finalB)])
-	centers = KMeans(n_clusters=min(options["clusters"], len(final4D)), random_state=0).fit_predict(final4D)
+	
+	return finalA, finalB
 
-	maxs = {}
-	for i,c in enumerate(centers):
-		if c not in maxs:
-			maxs[c] = i
-		elif finalV[maxs[c]] < finalV[i]:
-			maxs[c] = i
-
-	pointsA = [finalA[i] for i in maxs.values()]
-	pointsB = [finalB[i] for i in maxs.values()]
-	return pointsA, pointsB
 
 def display(im, points):
 	r = 3
