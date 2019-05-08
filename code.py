@@ -396,9 +396,12 @@ if __name__ == "__main__" :
 	VGG19 = models.vgg19(pretrained=True)
 
 	# print some informations about the network
-
-	nameA = "original_A.png"
-	nameB = "original_B.png"
+	if len(sys.argv) > 2:
+		nameA = sys.argv[2]
+		nameB = sys.argv[3]
+	else:
+		nameA = "original_A.png"
+		nameB = "original_B.png"
 
 	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
