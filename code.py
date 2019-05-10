@@ -387,8 +387,8 @@ if __name__ == "__main__" :
 
 	# print some informations about the network
 
-	nameA = "original_A.png"
-	nameB = "original_B.png"
+	nameA = "guitar.jpg"
+	nameB = "banjo.jpg"
 
 	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
@@ -404,12 +404,12 @@ if __name__ == "__main__" :
 
 	pointsA, pointsB = pyramid_search(FA, FB)
 
+	osize = [224, 224]
+	scale = transforms.Scale(osize, Image.BICUBIC)
 
+	imA = np.array(scale(Image.open(nameA).convert('RGB')))
 
-
-	imA = np.array(Image.open(nameA).convert('RGB'))
-
-	imB = np.array(Image.open(nameB).convert('RGB'))
+	imB = np.array(scale(Image.open(nameB).convert('RGB')))
 
 	# displays the centers on the images
 	plt.subplot(1, 2, 1)
