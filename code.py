@@ -257,7 +257,7 @@ def pyramid_search(FA_list, FB_list):
 	finalV = []
 
 	for l in range(L-1,0,-1) :
-		print("\n### Searching at level :", l)
+		print("\n### Searching at level :", l, "number of regions is ", len(R))
 		new_R=[]
 		
 		# get the activations at
