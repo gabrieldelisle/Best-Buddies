@@ -16,7 +16,8 @@ import json
 
 # save all the options in this dictionary
 options = None
-
+x = 0
+y = 0
 
 def load_options(argv):
 	if len(argv) > 1:
@@ -243,6 +244,186 @@ def bestBuddies(FA,FB,FA_e, xA, yA, FB_e, xB, yB, prevV, radius, norm=True):
 radius_list=[4,4,6,6] #use radius_list[l-2] for l=5to2
 l_layer=[5,10,19,28,37] #use l_layer[l-1] for l=5to1
 
+
+
+def bestBuddiesCenterd(XY_l,FA,FB,FA_e, xA, yA, FB_e, xB, yB, prevV, radius, norm=True, rec_field_radius=3):
+	px1, py1, px2, py2 = FA_e
+	qx1, qy1, qx2, qy2 = FB_e
+	
+	# extract regions
+	fA = FA[:,:,px1:px2, :][:,:,:, py1:py2]
+	fB = FB[:,:,qx1:qx2, :][:,:,:, qy1:qy2]
+
+	na = fA.shape[2]
+	ma = fA.shape[3]
+
+	x_l,y_l = XY_l
+
+	if norm:
+		CA, CB = normalize(fA, fB)
+	else:
+		CA, CB = (fA, fB)
+
+	nb = fB.shape[2]
+	mb = fB.shape[3]
+
+	#CA, CB = normalize(fA, FB)
+	corr = correlation_conv(CA, CB, radius)
+	# filter for keeping only significative activations
+	normA = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (fA,fA)))
+	normB = torch.sqrt(torch.einsum("ijkl,ijkl->kl", (fB,fB)))
+	HA = (normA - torch.min(normA)) / (torch.max(normA) - torch.min(normA))
+	HB = (normB - torch.min(normB)) / (torch.max(normB) - torch.min(normB))
+	gamma = options["threshold"]
+	bbA = []
+	bbB = []
+	V = []
+	#print(
+	#	"CA", CA.shape,"\n",
+	#	"CB", CB.shape,"\n",
+	#	"HA", HA.shape,"\n",
+	#	"HB", HB.shape,"\n",
+	#	"corr", corr.shape
+	#	)
+
+
+
+	for p in range(corr.shape[0]):
+		q = torch.argmax(corr[p,:]).item()
+		if torch.argmax(corr[:,q]).item() == p:
+			px, py = p//ma, p%ma
+			qx, qy = q//mb, q%mb
+
+			if abs(px + xA-x_l) >= rec_field_radius or abs(py + yA-y_l)>= rec_field_radius:
+				continue
+			# print("p)",p , "-->", (px,py))
+			# print("q)",q , "-->", (qx,qy))
+
+			if HA[px, py] > gamma and HB[qx, qy] > gamma: 
+				bbA.append((px + xA, py + yA))
+				bbB.append((qx + xB, qy + yB))
+				V.append(prevV + HA[px, py] +HB[qx, qy])
+	return bbA, bbB, V
+
+
+radius_list=[4,4,6,6] #use radius_list[l-2] for l=5to2
+l_layer=[5,10,19,28,37] #use l_layer[l-1] for l=5to1
+
+def pyramid_search_one_point(x, y, FA_list, FB_list):
+
+	# number of layers
+	L = len(FA_list) 
+
+	# compute x, y coordinates in all layers.
+	XY = [(x,y),(x,y)]
+	rec = [3, 3, 6,9,12,15]
+
+	for l in [2,3,4,5]:
+		XY.append((int(XY[l-1][0]/2),int(XY[l-1][1]/2)))
+
+
+	A_extremes = (0,0, FA_list[-1].shape[2], FA_list[-1].shape[3])
+	B_extremes = (0,0, FB_list[-1].shape[2], FB_list[-1].shape[3])
+	prevV = 0
+	R = [[A_extremes, 0, 0, B_extremes , 0, 0, prevV]]
+	finalA = []
+	finalB = []
+	finalV = []
+
+	for l in range(L-1,0,-1) :
+		print("\n### Searching at level :", l, "number of regions is ", len(R))
+		new_R=[]
+		
+
+		x_l,y_l = XY[l]
+		# get the activations at
+		# the leyer before
+		FA = FA_list[l-1]
+		FB = FB_list[l-1]
+
+
+		tot_regions = len(R)
+		# for every region at the current level
+		# find the best buddies
+		for idx, regions in enumerate(R):
+			bbA, bbB, V = bestBuddiesCenterd(XY[l],FA_list[l], FB_list[l], *regions, radius=options["patch_radius"][l-1], norm=(l!=L-1), rec_field_radius=rec[l])
+			#print(bbA, bbB)
+			progress(idx + 1, tot_regions)
+			# if in the first layer
+			# then save the best buddies
+
+			#print(bbA)
+			#print(bbB)
+			if l==1:
+				finalA += bbA
+				finalB += bbB
+				finalV += V 
+
+			# if not in the last layer compute the 
+			# regions in the above layer
+
+			if l > 1:
+
+				for k in range(len(bbA)):
+					px, py = bbA[k]
+					qx, qy = bbB[k]
+					na = FA.shape[2]
+					ma = FA.shape[3]
+					nb = FB.shape[2]
+					mb = FB.shape[3]
+					r = radius_list[l-2]+1
+
+					# the normalization is done 
+					# patch wise
+					R1_Nx = neighbours(2*px, r, na)
+					R1_Ny = neighbours(2*py, r, ma)
+
+
+					R2_Nx = neighbours(2*qx, r, nb)
+					R2_Ny = neighbours(2*qy, r, mb)
+
+
+					# if the regions are too small ignore them
+					if len(R1_Nx) < 2 or len(R2_Nx) < 2 or len(R1_Ny) < 2 or len(R2_Ny) < 2 :
+						print("skip region")	
+						continue
+
+					else:
+						R1_extremes = (R1_Nx[0],R1_Ny[0], R1_Nx[-1] + 1, R1_Ny[-1] + 1) 
+						R2_extremes = (R2_Nx[0],R2_Ny[0], R2_Nx[-1] + 1, R2_Ny[-1] + 1) 
+					# print("for ",(px,py), " , ",(qx,qy))
+					# print(R1.shape)
+					# print(R2.shape)
+					Xa = max(0,2 * px - (r//2))
+					Ya = max(0,2 * py - (r//2))
+					Xb = max(0,2 * qx - (r//2))
+					Yb = max(0,2 * qy - (r//2))
+					new_R.append(( R1_extremes, Xa, Ya,
+						R2_extremes,Xb , Yb, V[k]))
+				
+					#new_R.append(( R1, 2 * px, 2 * py,
+					#	R2, 2 * qx, 2 * qy))
+				R = new_R
+
+	print("\n\nNumber of BB found :", len(finalA))
+	finalA, finalB = np.array([[u for u in v] for v in finalA]), np.array([[u for u in v] for v in finalB])
+	#centers = KMeans(n_clusters=min(options["clusters"], len(pointsA)), random_state=0).fit(pointsA).cluster_centers_
+	#centers = KMeans(n_clusters=min(options["clusters"], len(finalA)), random_state=0).fit_predict(finalA)
+	final4D = np.array([[*u, *v] for u,v in zip(finalA, finalB)])
+	centers = KMeans(n_clusters=min(options["clusters"], len(final4D)), random_state=0).fit_predict(final4D)
+
+	maxs = {}
+	for i,c in enumerate(centers):
+		if c not in maxs:
+			maxs[c] = i
+		elif finalV[maxs[c]] < finalV[i]:
+			maxs[c] = i
+
+	pointsA = [finalA[i] for i in maxs.values()]
+	pointsB = [finalB[i] for i in maxs.values()]
+	return pointsA, pointsB
+
+
 def pyramid_search(FA_list, FB_list):
 
 	# number of layers
@@ -374,6 +555,33 @@ def merge(imA, pointsA, imB, pointsB):
 	plt.show()
 
 
+def pick_point(name):
+	osize = [224, 224]
+	scale = transforms.Resize(osize, Image.BICUBIC)
+	im = np.array(scale(Image.open(name).convert('RGB')))
+	fig, ax = plt.subplots()
+	ax.set_title('click on points', picker=True)
+	ax.set_ylabel('ylabel', picker=True, bbox=dict(facecolor='red'))
+	line= ax.imshow(im, aspect='auto',picker=True)
+
+
+	def onclick(event):
+		im[int(event.ydata)-1:int(event.ydata)+1,int(event.xdata)-1: int(event.xdata)+1,:] = [255,255,255]
+
+		global x 
+		x = int(event.ydata)
+		global y 
+		y = int(event.xdata)
+
+		ax.imshow(im)
+		plt.show()
+
+	cid = fig.canvas.mpl_connect('button_press_event', onclick)
+
+
+	plt.show()
+
+
 
 if __name__ == "__main__" :
 
@@ -397,15 +605,17 @@ if __name__ == "__main__" :
 	FB = forward_pass(imB, VGG19)
 
 
+
+	pick_point(nameA)
 	# print sizes of intermediate "images"
 	net_info(VGG19, imA)
 	intermediate_shapes(FA)
 
 
-	pointsA, pointsB = pyramid_search(FA, FB)
+	pointsA, pointsB = pyramid_search_one_point(x,y,FA, FB)
 
 	osize = [224, 224]
-	scale = transforms.Scale(osize, Image.BICUBIC)
+	scale = transforms.Resize(osize, Image.BICUBIC)
 
 	imA = np.array(scale(Image.open(nameA).convert('RGB')))
 
@@ -425,7 +635,6 @@ if __name__ == "__main__" :
 	imB = imB.astype(float)/255
 	#imA, imB = normalize_style(imA, imB)
 
-	merge(imA, pointsA, imB, pointsB)
 
 
 
