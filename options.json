@@ -2,5 +2,5 @@
     "threshold" : 0.05,
     "layers" : [2,7,12,21,30],
     "patch_radius" : [5,5,3,3,3],
-    "clusters": 1
+    "clusters": 20
 }
