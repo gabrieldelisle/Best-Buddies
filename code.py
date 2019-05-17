@@ -624,8 +624,13 @@ if __name__ == "__main__" :
 	# displays the centers on the images
 	plt.subplot(1, 2, 1)
 	plt.imshow(display(imA, pointsA))
+	plt.gca().get_xaxis().set_visible(False)
+	plt.gca().get_yaxis().set_visible(False)
 	plt.subplot(1, 2, 2)
+	plt.gca().get_xaxis().set_visible(False)
+	plt.gca().get_yaxis().set_visible(False)
 	plt.imshow(display(imB, pointsB)) 
+	plt.savefig(nameA[:-4] + nameB[:-4] + ".pdf", bbox_inches="tight")
 	plt.show()
 	plt.close()
 
