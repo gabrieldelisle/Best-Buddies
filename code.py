@@ -341,13 +341,13 @@ def pyramid_search(FA_list, FB_list):
 	pointsB = [finalB[i] for i in maxs.values()]
 	return pointsA, pointsB
 
-def display(im, points):
-	r = 3
+def display(im, points, colors):
+	r = 4
 	n = im.shape[0]
-	for px,py in points:
+	for i, (px,py) in enumerate(points):
 		for u in neighbours(int(px), r, n) :
 			for v in neighbours(int(py), r, n) :
-				im[round(u),round(v)] = np.array([255,0,0])
+				im[round(u),round(v)] = colors[i]
 
 	return im
 
@@ -387,8 +387,8 @@ if __name__ == "__main__" :
 
 	# print some informations about the network
 
-	nameA = "pooh.jpg"
-	nameB = "xijinp.jpg"
+	nameA = "original_A.png"
+	nameB = "original_B.png"
 
 	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
@@ -411,15 +411,16 @@ if __name__ == "__main__" :
 
 	imB = np.array(scale(Image.open(nameB).convert('RGB')))
 
+	colors = np.random.randint(0,255,(len(pointsA),3))
 	# displays the centers on the images
 	plt.subplot(1, 2, 1)
-	plt.imshow(display(imA, pointsA))
+	plt.imshow(display(imA, pointsA,colors))
 	plt.gca().get_xaxis().set_visible(False)
 	plt.gca().get_yaxis().set_visible(False)
 	plt.subplot(1, 2, 2)
 	plt.gca().get_xaxis().set_visible(False)
 	plt.gca().get_yaxis().set_visible(False)
-	plt.imshow(display(imB, pointsB)) 
+	plt.imshow(display(imB, pointsB, colors)) 
 	plt.savefig(nameA[:-4] + nameB[:-4] + ".pdf", bbox_inches="tight")
 	plt.show()
 	plt.close()
