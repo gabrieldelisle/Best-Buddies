@@ -523,12 +523,12 @@ def pyramid_search(FA_list, FB_list):
 	return pointsA, pointsB
 
 def display(im, points):
-	r = 3
+	r = 5 
 	n = im.shape[0]
 	for px,py in points:
 		for u in neighbours(int(px), r, n) :
 			for v in neighbours(int(py), r, n) :
-				im[round(u),round(v)] = np.array([255,0,0])
+				im[round(u),round(v)] = np.array([255,128,0])
 
 	return im
 
@@ -595,8 +595,8 @@ if __name__ == "__main__" :
 
 	# print some informations about the network
 
-	nameA = "guitar.jpg"
-	nameB = "banjo.jpg"
+	nameA = "seehorse.jpg"
+	nameB = "horse.jpeg"
 
 	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
