@@ -387,8 +387,8 @@ if __name__ == "__main__" :
 
 	# print some informations about the network
 
-	nameA = "original_A.png"
-	nameB = "original_B.png"
+	nameA = "putincrop.jpg"
+	nameB = "dog.jpg"
 
 	imA = load(nameA)
 	FA = forward_pass(imA, VGG19)
