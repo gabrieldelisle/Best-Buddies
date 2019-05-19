@@ -8,6 +8,10 @@ You can specify some useful parameters in the file options.json:
 - patch radius determine the size of the neighborhood around the best buddies where we will search the next ones in the following layer
 - cluster is the number of points we want to keep at the end of the algorithm
 
+# Selected Best Buddies
+
+The code for selected best buddies, along with the data and the results used, are in the branch "topdown".
+
 # Fine-tuning
 
 We used the Deep Fashion database to fine tune VGG19 in the file fine_tuning.py
