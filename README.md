@@ -1,6 +1,7 @@
 # Best-Buddies
 
 The main algorithm to find the neural best buddies between 2 pictures is in code.py
+
 You can specify some useful parameters in the file options.json:
 - gamma is the treshold for the relative activation under which we don't take into account the best buddies for the next layer
 - layers are the selected layers for the computation of best buddies
@@ -10,7 +11,8 @@ You can specify some useful parameters in the file options.json:
 # Fine-tuning
 
 We used the Deep Fashion database to fine tune VGG19 in the file fine_tuning.py
-To use this script, you need to download :
+
+To use this script, you need to download:
 - the folder img here http://mmlab.ie.cuhk.edu.hk/projects/DeepFashion.html
 - the file list_category_img.txt here http://mmlab.ie.cuhk.edu.hk/projects/DeepFashion.html
 
