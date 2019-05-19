@@ -287,7 +287,8 @@ def pyramid_search(FA_list, FB_list):
 			# if not in the last layer compute the 
 			# regions in the above layer
 		print("\n\nNumber of BB found :", len(finalA))
-		finalA, finalB = k_means(finalA, finalB, finalV, options["clusters"][l-1])
+		if l==1:
+			finalA, finalB = k_means(finalA, finalB, finalV, options["clusters"][l-1])
 
 		if l > 1:
 			
@@ -423,20 +424,21 @@ if __name__ == "__main__" :
 	pointsA, pointsB = pyramid_search(FA, FB)
 
 
-
-
 	imA = np.array(Image.open(nameA).convert('RGB'))
-
 	imB = np.array(Image.open(nameB).convert('RGB'))
 
 	# displays the centers on the images
 
 	colors = np.random.randint(0,255,(len(pointsA),3))
 	plt.subplot(1, 2, 1)
-	plt.imshow(display(imA, pointsA, colors))
+	plt.imshow(display(imA, pointsA,colors))
+	plt.gca().get_xaxis().set_visible(False)
+	plt.gca().get_yaxis().set_visible(False)
 	plt.subplot(1, 2, 2)
+	plt.gca().get_xaxis().set_visible(False)
+	plt.gca().get_yaxis().set_visible(False)
 	plt.imshow(display(imB, pointsB, colors)) 
-	plt.show()
+	plt.savefig('figure.pdf', bbox_inches="tight")
 	plt.close()
 
 	imA = np.array(Image.open(nameA).convert('RGB'))
@@ -446,14 +448,4 @@ if __name__ == "__main__" :
 	#imA, imB = normalize_style(imA, imB)
 
 	merge(imA, pointsA, imB, pointsB)
-
-
-
-
-
-
-
-# print(bestBuddies(FA[-1], FB[-1]))
-
-
 
