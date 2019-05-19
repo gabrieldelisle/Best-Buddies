@@ -16,8 +16,8 @@ import json
 
 # save all the options in this dictionary
 options = None
-x = 0
-y = 0
+x = 20
+y = 25
 
 def load_options(argv):
 	if len(argv) > 1:
@@ -589,24 +589,26 @@ if __name__ == "__main__" :
 	# options contained in the option file
 	options = load_options(sys.argv)
 
+	device = torch.device("cuda:0")
+
 
 	# load the model
-	VGG19 = models.vgg19(pretrained=True)
-
+	VGG19 = torch.load("fine-tuned-pietro")
+	VGG19.eval()
 	# print some informations about the network
 
 	nameA = "fashion_A.jpg"
 	nameB = "fashion_B.jpg"
 
-	imA = load(nameA)
+	imA = load(nameA).to(device)
 	FA = forward_pass(imA, VGG19)
 
-	imB = load(nameB)
+	imB = load(nameB).to(device)
 	FB = forward_pass(imB, VGG19)
 
 
 
-	pick_point(nameA)
+	#pick_point(nameA)
 	# print sizes of intermediate "images"
 	net_info(VGG19, imA)
 	intermediate_shapes(FA)
@@ -631,7 +633,7 @@ if __name__ == "__main__" :
 	plt.gca().get_yaxis().set_visible(False)
 	plt.imshow(display(imB, pointsB)) 
 	plt.savefig(nameA[:-4] + nameB[:-4] + ".pdf", bbox_inches="tight")
-	plt.show()
+	#plt.show()
 	plt.close()
 
 	imA = np.array(Image.open(nameA).convert('RGB'))
