@@ -24,7 +24,7 @@ Then, you can specify how much data you want to use in the script parse.py, and 
 Finally, you can use the script fine_tuning.py to train the last layers of VGG19 to classify the clothes from Deep Fashion. This will save the network, which can be used test_fine.py to find best buddies between two images
 
 # Visualization_conv_cat
-The code to visualize the outputs after each convolutional operation with the VGG19 CNN
+The code to visualize the outputs after each convolution operation with the VGG19 CNN
 
 # Visualization_filters
 The code to visualize the filters of each layer of the VGG19 CNN
