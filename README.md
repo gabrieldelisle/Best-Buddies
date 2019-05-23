@@ -23,7 +23,7 @@ To use this script, you need to download:
 Then, you can specify how much data you want to use in the script parse.py, and run it to prepare the data.
 Finally, you can use the script fine_tuning.py to train the last layers of VGG19 to classify the clothes from Deep Fashion. This will save the network, which can be used test_fine.py to find best buddies between two images
 
-# Visualization_conv_cat
+# Visualization_outputs
 The code to visualize the outputs after each convolution operation with the VGG19 CNN
 
 # Visualization_filters
